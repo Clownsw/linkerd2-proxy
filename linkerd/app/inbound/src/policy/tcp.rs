@@ -157,8 +157,8 @@ where
                 tokio::select! {
                     res = &mut call => return res.map_err(Into::into),
                     _ = policy.changed() => {
-                        if let Err(denied) = check_authorized(&*policy.server.borrow(), policy.dst, client, &tls) {
-                            let meta = policy.meta();
+                        if let Err(denied) = check_authorized((&*policy.borrow()).map_err(ToOwned::to_owned)?, policy.dst, client, &tls) {
+                            let meta = policy.meta()?;
                             tracing::info!(
                                 server.group = %meta.group(),
                                 server.kind = %meta.kind(),

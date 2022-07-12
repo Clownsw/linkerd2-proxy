@@ -84,7 +84,7 @@ pub mod proto {
     use linkerd2_proxy_api::{inbound as api, meta};
     use std::time::Duration;
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidServer {
         #[error("missing protocol detection timeout")]
         MissingDetectTimeout,
@@ -108,7 +108,7 @@ pub mod proto {
         HttpRoute(#[from] http::proto::InvalidHttpRoute),
     }
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidMeta {
         #[error("missing")]
         Missing,

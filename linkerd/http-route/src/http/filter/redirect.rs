@@ -197,20 +197,21 @@ impl RedirectRequest {
 pub mod proto {
     use super::*;
     use linkerd2_proxy_api::{http_route as api, http_types};
+    use std::sync::Arc;
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidRequestRedirect {
         #[error("invalid location scheme: {0}")]
         Scheme(#[from] http_types::InvalidScheme),
 
         #[error("invalid HTTP status code: {0}")]
-        Status(#[from] http::status::InvalidStatusCode),
+        Status(#[source] Arc<http::status::InvalidStatusCode>),
 
         #[error("HTTP status code must be a u16: {0}")]
         StatusNonU16(u32),
 
         #[error("invalid HTTP authority: {0}")]
-        Authority(#[from] http::uri::InvalidUri),
+        Authority(#[source] Arc<http::uri::InvalidUri>),
 
         #[error("port number must be a u16: {0}")]
         Port(u32),
@@ -219,7 +220,7 @@ pub mod proto {
         RelativePath,
 
         #[error("{0}")]
-        Value(#[from] http::header::InvalidHeaderValue),
+        Value(#[source] Arc<http::header::InvalidHeaderValue>),
     }
 
     // === impl RedirectRequest ===
@@ -228,7 +229,11 @@ pub mod proto {
         type Error = InvalidRequestRedirect;
 
         fn try_from(rr: api::RequestRedirect) -> Result<Self, Self::Error> {
-            let scheme = rr.scheme.map(TryInto::try_into).transpose()?;
+            let scheme = rr
+                .scheme
+                .map(http::uri::Scheme::try_from)
+                .transpose()
+                .map_err(|e| InvalidRequestRedirect::Scheme(e.into()))?;
 
             // We could validate that hostnames are valid DNS names, but
             // practically it won't break anything in the proxy if these are
@@ -237,11 +242,13 @@ pub mod proto {
             let authority = match (rr.host, NonZeroU16::try_from(port)) {
                 (h, p) if h.is_empty() => p.ok().map(AuthorityOverride::Port),
                 (h, Ok(p)) => {
-                    let a = format!("{}:{}", h, p).try_into()?;
+                    let a = Authority::try_from(format!("{}:{}", h, p))
+                        .map_err(|e| InvalidRequestRedirect::Authority(e.into()))?;
                     Some(AuthorityOverride::Exact(a))
                 }
                 (h, Err(_)) => {
-                    let a = h.try_into()?;
+                    let a = Authority::try_from(h)
+                        .map_err(|e| InvalidRequestRedirect::Authority(e.into()))?;
                     Some(AuthorityOverride::Host(a))
                 }
             };
@@ -271,7 +278,11 @@ pub mod proto {
                 .map_err(|_| InvalidRequestRedirect::StatusNonU16(rr.status))?
             {
                 0 => None,
-                s => Some(http::StatusCode::try_from(s)?),
+                s => {
+                    let s = http::StatusCode::try_from(s)
+                        .map_err(|e| InvalidRequestRedirect::Status(e.into()))?;
+                    Some(s)
+                }
             };
 
             Ok(RedirectRequest {

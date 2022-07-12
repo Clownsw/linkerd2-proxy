@@ -53,7 +53,7 @@ pub mod proto {
     use crate::{authz::Network, proto::InvalidMeta};
     use linkerd2_proxy_api::{inbound as api, net::InvalidIpNetwork};
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidAuthz {
         #[error("missing networks")]
         MissingNetworks,

@@ -61,7 +61,7 @@ pub mod proto {
     use super::*;
     use linkerd2_proxy_api::http_route as api;
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidQueryParamMatch {
         #[error("missing a query param name")]
         MissingName,

@@ -2,7 +2,7 @@ use super::{api, AllowPolicy, DefaultPolicy, GetPolicy};
 use linkerd_app_core::{proxy::http, transport::OrigDstAddr, Error};
 use linkerd_cache::Cache;
 pub use linkerd_server_policy::{
-    authz::Suffix, Authentication, Authorization, Protocol, ServerPolicy,
+    authz::Suffix, proto::InvalidServer, Authentication, Authorization, Protocol, ServerPolicy,
 };
 use std::{
     collections::HashSet,
@@ -18,7 +18,7 @@ pub struct Store<S> {
     discover: Option<api::Watch<S>>,
 }
 
-type Rx = watch::Receiver<ServerPolicy>;
+type Rx = watch::Receiver<Result<ServerPolicy, InvalidServer>>;
 
 /// A hasher for ports.
 ///
@@ -40,7 +40,7 @@ impl<S> Store<S> {
                 // When using a fixed policy, we don't need to watch for changes. It's
                 // safe to discard the sender, as the receiver will continue to let us
                 // borrow/clone each fixed policy.
-                let (_, rx) = watch::channel(s);
+                let (_, rx) = watch::channel(Ok(s));
                 (p, rx)
             });
             Cache::with_permanent_from_iter(idle_timeout, rxs)
@@ -80,7 +80,7 @@ impl<S> Store<S> {
                 let discover = discover.clone();
                 let default = default.clone();
                 let rx = info_span!("watch", port)
-                    .in_scope(|| discover.spawn_with_init(port, default.into()));
+                    .in_scope(|| discover.spawn_with_init(port, Ok(default.into())));
                 (port, rx)
             });
             Cache::with_permanent_from_iter(idle_timeout, rxs)
@@ -94,7 +94,7 @@ impl<S> Store<S> {
     }
 
     fn spawn_default(default: DefaultPolicy) -> Rx {
-        let (tx, rx) = watch::channel(ServerPolicy::from(default));
+        let (tx, rx) = watch::channel(Ok(ServerPolicy::from(default)));
         // Hold the sender until all of the receivers are dropped. This ensures
         // that receivers can be watched like any other policy.
         tokio::spawn(async move {

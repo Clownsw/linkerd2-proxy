@@ -29,15 +29,17 @@ impl ModifyHeader {
 #[cfg(feature = "proto")]
 pub mod proto {
     use super::*;
+    use http::header::{InvalidHeaderName, InvalidHeaderValue};
     use linkerd2_proxy_api::{http_route as api, http_types};
+    use std::sync::Arc;
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidModifyHeader {
         #[error("{0}")]
-        Name(#[from] http::header::InvalidHeaderName),
+        Name(#[source] Arc<InvalidHeaderName>),
 
         #[error("{0}")]
-        Value(#[from] http::header::InvalidHeaderValue),
+        Value(#[source] Arc<InvalidHeaderValue>),
     }
 
     // === impl ModifyRequestHeader ===
@@ -52,8 +54,12 @@ pub mod proto {
                 hs.into_iter()
                     .flat_map(|a| a.headers.into_iter())
                     .map(|h| {
-                        let name = h.name.parse::<HeaderName>()?;
-                        let value = HeaderValue::from_bytes(&h.value)?;
+                        let name = h
+                            .name
+                            .parse::<HeaderName>()
+                            .map_err(|e| InvalidModifyHeader::Name(e.into()))?;
+                        let value = HeaderValue::from_bytes(&h.value)
+                            .map_err(|e| InvalidModifyHeader::Value(e.into()))?;
                         Ok((name, value))
                     })
                     .collect()
@@ -64,8 +70,11 @@ pub mod proto {
             let remove = rhm
                 .remove
                 .into_iter()
-                .map(|n| n.parse())
-                .collect::<Result<Vec<HeaderName>, http::header::InvalidHeaderName>>()?;
+                .map(|n| {
+                    n.parse::<HeaderName>()
+                        .map_err(|e| InvalidModifyHeader::Name(e.into()))
+                })
+                .collect::<Result<Vec<HeaderName>, InvalidModifyHeader>>()?;
             Ok(ModifyHeader { add, set, remove })
         }
     }

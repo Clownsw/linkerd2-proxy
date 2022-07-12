@@ -109,7 +109,7 @@ pub mod proto {
     use crate::http::r#match::header::proto::InvalidHeaderMatch;
     use linkerd2_proxy_api::grpc_route as api;
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidRouteMatch {
         #[error("invalid RPC match: {0}")]
         Rpc(#[from] InvalidRpcMatch),
@@ -123,7 +123,7 @@ pub mod proto {
 
     // Currently, RPC match conversion is infallible; but this could change in
     // the future.
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidRpcMatch {}
 
     impl TryFrom<api::GrpcRouteMatch> for MatchRoute {

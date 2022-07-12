@@ -55,7 +55,7 @@ pub mod proto {
     };
     use std::sync::Arc;
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidGrpcRoute {
         #[error("invalid host match: {0}")]
         HostMatch(#[from] InvalidHostMatch),

@@ -105,10 +105,12 @@ impl std::cmp::Ord for RequestMatch {
 
 #[cfg(feature = "proto")]
 pub mod proto {
+    use std::sync::Arc;
+
     use super::*;
     use linkerd2_proxy_api::{http_route as api, http_types};
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidRouteMatch {
         #[error("invalid path match: {0}")]
         Path(#[from] path::proto::InvalidPathMatch),
@@ -140,7 +142,11 @@ pub mod proto {
                 .into_iter()
                 .map(|h| h.try_into())
                 .collect::<Result<Vec<_>, _>>()?;
-            let method = rm.method.map(http::Method::try_from).transpose()?;
+            let method = rm
+                .method
+                .map(http::Method::try_from)
+                .transpose()
+                .map_err(|e| InvalidRouteMatch::Method(e.into()))?;
             Ok(MatchRequest {
                 path,
                 headers,

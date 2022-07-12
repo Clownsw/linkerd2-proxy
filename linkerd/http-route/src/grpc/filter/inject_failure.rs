@@ -17,7 +17,7 @@ pub mod proto {
     pub use crate::http::filter::inject_failure::proto::InvalidDistribution;
     use linkerd2_proxy_api::grpc_route as api;
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidFailureResponse {
         #[error("gRPC status code is not a u16")]
         StatusNonU16(#[from] std::num::TryFromIntError),

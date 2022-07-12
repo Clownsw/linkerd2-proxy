@@ -22,6 +22,7 @@ use linkerd_app_core::{
     transport::{ClientAddr, OrigDstAddr, Remote},
 };
 use linkerd_cache::Cached;
+use linkerd_server_policy::proto::InvalidServer;
 pub use linkerd_server_policy::{
     authz::Suffix,
     grpc::Route as GrpcRoute,
@@ -52,7 +53,7 @@ pub enum DefaultPolicy {
 #[derive(Clone, Debug)]
 pub struct AllowPolicy {
     dst: OrigDstAddr,
-    server: Cached<watch::Receiver<ServerPolicy>>,
+    server: Cached<watch::Receiver<Result<ServerPolicy, InvalidServer>>>,
 }
 
 // Describes an authorized non-HTTP connection.
@@ -102,21 +103,24 @@ impl AllowPolicy {
     pub(crate) fn for_test(
         dst: OrigDstAddr,
         server: ServerPolicy,
-    ) -> (Self, watch::Sender<ServerPolicy>) {
-        let (tx, server) = watch::channel(server);
+    ) -> (Self, watch::Sender<Result<ServerPolicy, InvalidServer>>) {
+        let (tx, server) = watch::channel(Ok(server));
         let server = Cached::uncached(server);
         let p = Self { dst, server };
         (p, tx)
     }
 
     #[inline]
-    pub(crate) fn borrow(&self) -> tokio::sync::watch::Ref<'_, ServerPolicy> {
+    pub(crate) fn borrow(
+        &self,
+    ) -> tokio::sync::watch::Ref<'_, Result<ServerPolicy, InvalidServer>> {
         self.server.borrow()
     }
 
     #[inline]
-    pub(crate) fn protocol(&self) -> Protocol {
-        self.server.borrow().protocol.clone()
+    pub(crate) fn protocol(&self) -> Result<Protocol, InvalidServer> {
+        let s = (*self.server.borrow())?;
+        Ok(s.protocol.clone())
     }
 
     #[inline]
@@ -125,13 +129,15 @@ impl AllowPolicy {
     }
 
     #[inline]
-    pub fn meta(&self) -> Arc<Meta> {
-        self.server.borrow().meta.clone()
+    pub fn meta(&self) -> Result<Arc<Meta>, InvalidServer> {
+        let s = (*self.server.borrow())?;
+        Ok(s.meta.clone())
     }
 
     #[inline]
-    pub fn server_label(&self) -> ServerLabel {
-        ServerLabel(self.server.borrow().meta.clone())
+    pub fn server_label(&self) -> Result<ServerLabel, InvalidServer> {
+        let s = (*self.server.borrow())?;
+        Ok(ServerLabel(s.meta.clone()))
     }
 
     async fn changed(&mut self) {
@@ -141,14 +147,16 @@ impl AllowPolicy {
         }
     }
 
-    fn routes(&self) -> Option<Routes> {
-        let borrow = self.server.borrow();
-        match &borrow.protocol {
-            Protocol::Detect { http, .. } | Protocol::Http1(http) | Protocol::Http2(http) => {
-                Some(Routes::Http(http.clone()))
-            }
-            Protocol::Grpc(grpc) => Some(Routes::Grpc(grpc.clone())),
-            _ => None,
+    fn routes(&self) -> Result<Option<Routes>, InvalidServer> {
+        match *self.server.borrow() {
+            Err(e) => return Err(e.clone()),
+            Ok(b) => match &b.protocol {
+                Protocol::Detect { http, .. } | Protocol::Http1(http) | Protocol::Http2(http) => {
+                    Ok(Some(Routes::Http(http.clone())))
+                }
+                Protocol::Grpc(grpc) => Ok(Some(Routes::Grpc(grpc.clone()))),
+                _ => Ok(None),
+            },
         }
     }
 }

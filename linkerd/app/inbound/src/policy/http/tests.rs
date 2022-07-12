@@ -148,7 +148,7 @@ async fn http_route() {
     // Update all of the policies and then test the same requests to ensure that
     // the requests are handled differently after an update.
 
-    tx.send(ServerPolicy {
+    tx.send(Ok(ServerPolicy {
         meta: Arc::new(Meta::Resource {
             group: "policy.linkerd.io".into(),
             kind: "Server".into(),
@@ -197,7 +197,7 @@ async fn http_route() {
                 },
             ],
         }])),
-    })
+    }))
     .expect("must send");
 
     assert!(svc

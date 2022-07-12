@@ -83,13 +83,15 @@ impl Hash for Distribution {
 
 #[cfg(feature = "proto")]
 pub mod proto {
+    use std::sync::Arc;
+
     use super::*;
     use linkerd2_proxy_api::http_route as api;
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidFailureResponse {
         #[error("invalid HTTP status code: {0}")]
-        Status(#[from] http::status::InvalidStatusCode),
+        Status(#[source] Arc<http::status::InvalidStatusCode>),
 
         #[error("HTTP status is not a u16")]
         StatusNonU16(#[from] std::num::TryFromIntError),
@@ -98,7 +100,7 @@ pub mod proto {
         Distribution(#[from] InvalidDistribution),
     }
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     #[error("invalid request distribution: {0}")]
     pub struct InvalidDistribution(#[from] rand::distributions::BernoulliError);
 
@@ -109,7 +111,8 @@ pub mod proto {
 
         fn try_from(proto: api::HttpFailureInjector) -> Result<Self, Self::Error> {
             let response = FailureResponse {
-                status: u16::try_from(proto.status)?.try_into()?,
+                status: http::StatusCode::try_from(u16::try_from(proto.status)?)
+                    .map_err(|e| InvalidFailureResponse::Status(e.into()))?,
                 message: proto.message.into(),
             };
 

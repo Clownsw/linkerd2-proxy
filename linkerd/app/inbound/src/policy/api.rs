@@ -1,4 +1,4 @@
-use futures::prelude::*;
+use futures::{prelude::*, stream::BoxStream};
 use linkerd2_proxy_api::inbound::{
     self as api, inbound_server_policies_client::InboundServerPoliciesClient as Client,
 };
@@ -8,7 +8,7 @@ use linkerd_app_core::{
     svc::Service,
     Error, Recover, Result,
 };
-use linkerd_server_policy::ServerPolicy;
+use linkerd_server_policy::{proto::InvalidServer, ServerPolicy};
 use linkerd_tonic_watch::StreamWatch;
 
 #[derive(Clone, Debug)]
@@ -48,8 +48,9 @@ where
         http::HttpBody<Data = tonic::codegen::Bytes, Error = Error> + Default + Send + 'static,
     S::Future: Send + 'static,
 {
-    type Response =
-        tonic::Response<futures::stream::BoxStream<'static, Result<ServerPolicy, tonic::Status>>>;
+    type Response = tonic::Response<
+        BoxStream<'static, Result<Result<ServerPolicy, InvalidServer>, tonic::Status>>,
+    >;
     type Error = tonic::Status;
     type Future = futures::future::BoxFuture<'static, Result<Self::Response, tonic::Status>>;
 
@@ -71,16 +72,7 @@ where
             Ok(rsp.map(|updates| {
                 updates
                     .map(|up| {
-                        // FIXME(ver): If we get an invalid policy, we can't
-                        // pretend we didn't get it -- it might mean that the
-                        // server has tried to configure a policy that we don't
-                        // support!
-                        let policy = ServerPolicy::try_from(up?).map_err(|e| {
-                            tonic::Status::invalid_argument(&*format!(
-                                "received invalid policy: {}",
-                                e
-                            ))
-                        })?;
+                        let policy = ServerPolicy::try_from(up?);
                         tracing::debug!(?policy);
                         Ok(policy)
                     })

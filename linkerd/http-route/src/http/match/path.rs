@@ -107,7 +107,7 @@ pub mod proto {
     use super::*;
     use linkerd2_proxy_api::http_route as api;
 
-    #[derive(Debug, thiserror::Error)]
+    #[derive(Clone, Debug, thiserror::Error)]
     pub enum InvalidPathMatch {
         #[error("missing match")]
         MissingMatch,

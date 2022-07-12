@@ -134,7 +134,7 @@ impl<N> Inbound<N> {
                         // been wrapped in mesh identity. In any case, we don't actually validate
                         // whether app TLS was employed, but we use this as a signal that we should
                         // not perform additional protocol detection.
-                        if matches!(protocol, Protocol::Tls { .. }) {
+                        if matches!(protocol, Ok(Protocol::Tls { .. })) {
                             return Ok(svc::Either::B(tls));
                         }
 
@@ -157,7 +157,7 @@ impl<N> Inbound<N> {
                     // or HTTP detection stack.
                     |t: T| -> Result<_, Infallible> {
                         let policy: AllowPolicy = t.param();
-                        if matches!(policy.protocol(), Protocol::Opaque { .. }) {
+                        if matches!(policy.protocol(), Ok(Protocol::Opaque { .. })) {
                             const TLS_PORT_SKIPPED: tls::ConditionalServerTls =
                                 tls::ConditionalServerTls::None(tls::NoServerTls::PortSkipped);
                             return Ok(svc::Either::B(Tls {
